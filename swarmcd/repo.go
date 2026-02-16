@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
@@ -114,7 +114,7 @@ func (repo *stackRepo) fetchTag(tag string) (revision string, err error) {
 	fetchOptions := &git.FetchOptions{
 		RemoteName: "origin",
 		Auth:       repo.auth,
-		RefSpecs:   []config.RefSpec{config.RefSpec("+refs/tags/" + tag + ":refs/tags/" + tag)},
+		RefSpecs:   []gitconfig.RefSpec{gitconfig.RefSpec("+refs/tags/" + tag + ":refs/tags/" + tag)},
 		Force:      true,
 	}
 	err = repo.gitRepoObject.Fetch(fetchOptions)
