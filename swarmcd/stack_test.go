@@ -1,7 +1,6 @@
 package swarmcd
 
 import (
-	"log/slog"
 	"sync"
 	"testing"
 )
@@ -88,11 +87,13 @@ func TestNewSwarmStackWithTag(t *testing.T) {
 	}
 }
 
-// Verify slog.Attr is correctly created
-func TestRefAttrSlogIntegration(t *testing.T) {
+// Verify refAttr prefers tag over branch when both could theoretically be set
+func TestRefAttrPrefersTag(t *testing.T) {
 	repo := &stackRepo{name: "test", path: "test", url: "", auth: nil, lock: &sync.Mutex{}, gitRepoObject: nil}
-	stack := newSwarmStack("test", repo, "", "v1.0.0", "docker-compose.yaml", nil, "", false)
+	// Even if branch has a value, tag takes precedence
+	stack := newSwarmStack("test", repo, "main", "v1.0.0", "docker-compose.yaml", nil, "", false)
 	attr := stack.refAttr()
-	// Verify it's a valid slog.Attr that can be used with slog
-	_ = slog.NewLogLogger(slog.NewTextHandler(nil, nil), slog.LevelDebug).With(attr.Key, attr.Value)
+	if attr.Key != "tag" {
+		t.Errorf("expected key 'tag' to take precedence, got '%s'", attr.Key)
+	}
 }
