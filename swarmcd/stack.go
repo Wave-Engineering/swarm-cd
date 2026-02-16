@@ -18,19 +18,17 @@ type swarmStack struct {
 	name            string
 	repo            *stackRepo
 	branch          string
-	tag             string
 	composePath     string
 	sopsFiles       []string
 	valuesFile      string
 	discoverSecrets bool
 }
 
-func newSwarmStack(name string, repo *stackRepo, branch string, tag string, composePath string, sopsFiles []string, valuesFile string, discoverSecrets bool) *swarmStack {
+func newSwarmStack(name string, repo *stackRepo, branch string, composePath string, sopsFiles []string, valuesFile string, discoverSecrets bool) *swarmStack {
 	return &swarmStack{
 		name:            name,
 		repo:            repo,
 		branch:          branch,
-		tag:             tag,
 		composePath:     composePath,
 		sopsFiles:       sopsFiles,
 		valuesFile:      valuesFile,
@@ -38,31 +36,18 @@ func newSwarmStack(name string, repo *stackRepo, branch string, tag string, comp
 	}
 }
 
-// refAttr returns an slog attribute for the git ref (branch or tag)
-func (swarmStack *swarmStack) refAttr() slog.Attr {
-	if swarmStack.tag != "" {
-		return slog.String("tag", swarmStack.tag)
-	}
-	return slog.String("branch", swarmStack.branch)
-}
-
 func (swarmStack *swarmStack) updateStack() (revision string, err error) {
 	log := logger.With(
 		slog.String("stack", swarmStack.name),
-		swarmStack.refAttr(),
+		slog.String("branch", swarmStack.branch),
 	)
 
-	if swarmStack.tag != "" {
-		log.Debug("fetching tag...")
-		revision, err = swarmStack.repo.fetchTag(swarmStack.tag)
-	} else {
-		log.Debug("pulling changes...")
-		revision, err = swarmStack.repo.pullChanges(swarmStack.branch)
-	}
+	log.Debug("pulling changes...")
+	revision, err = swarmStack.repo.pullChanges(swarmStack.branch)
 	if err != nil {
 		return
 	}
-	log.Debug("changes fetched", "revision", revision)
+	log.Debug("changes pulled", "revision", revision)
 
 	log.Debug("reading stack file...")
 	stackBytes, err := swarmStack.readStack()
@@ -159,7 +144,7 @@ func (swarmStack *swarmStack) decryptSopsFiles(composeMap map[string]any) (err e
 	}
 	log := logger.With(
 		slog.String("stack", swarmStack.name),
-		swarmStack.refAttr(),
+		slog.String("branch", swarmStack.branch),
 	)
 	for _, sopsFile := range sopsFiles {
 		log.Debug("decrypting secret...", "secret", sopsFile)
@@ -215,7 +200,7 @@ func (swarmStack *swarmStack) rotateObjects(objects map[string]any, objectType s
 	for objectName, object := range objects {
 		log := logger.With(
 			slog.String("stack", swarmStack.name),
-			swarmStack.refAttr(),
+			slog.String("branch", swarmStack.branch),
 			slog.String(objectType, objectName),
 		)
 		objectMap, ok := object.(map[string]any)

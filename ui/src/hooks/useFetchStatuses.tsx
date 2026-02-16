@@ -6,7 +6,6 @@ export interface StackStatus {
   Error: string
   Revision: string
   RepoURL: string
-  Ref: string
 }
 
 async function fetchFromServer(): Promise<StackStatus[]> {

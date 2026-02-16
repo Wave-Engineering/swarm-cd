@@ -5,14 +5,12 @@ function StatusCard({
   name,
   error,
   revision,
-  repoURL,
-  gitRef
+  repoURL
 }: Readonly<{
   name: string
   error: string
   revision: string
   repoURL: string
-  gitRef: string
 }>): React.ReactElement {
   return (
     <Box borderWidth="1px" borderRadius="sm" overflow="hidden" p={4} boxShadow="lg">
@@ -26,9 +24,6 @@ function StatusCard({
             <Text color="red.500">{error}</Text>
           </>
         )}
-
-        <KeyText>Watching:</KeyText>
-        <Text>{gitRef}</Text>
 
         <KeyText>Revision:</KeyText>
         <Text>{revision}</Text>
