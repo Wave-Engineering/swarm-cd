@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
@@ -14,10 +15,14 @@ import (
 )
 
 type StackStatus struct {
-	Error    string
-	Revision string
-	RepoURL  string
-	Ref      string
+	Error          string
+	Revision       string
+	RepoURL        string
+	RefType        string
+	RefValue       string
+	ComposeFile    string
+	LastChangeAt   *time.Time
+	LastDeployedAt *time.Time
 }
 
 var config *util.Config = &util.Configs
@@ -102,18 +107,21 @@ func initStacks() error {
 		// Validate branch/tag mutual exclusivity and determine ref
 		branch := stackConfig.Branch
 		tag := stackConfig.Tag
-		var ref string
+		var refType, refValue string
 
 		if branch != "" && tag != "" {
 			return fmt.Errorf("error initializing %s stack: cannot specify both branch and tag", stack)
 		} else if tag != "" {
-			ref = "tag:" + tag
+			refType = "tag"
+			refValue = tag
 		} else if branch != "" {
-			ref = "branch:" + branch
+			refType = "branch"
+			refValue = branch
 		} else {
 			// Default to main branch for backward compatibility
 			branch = "main"
-			ref = "branch:main"
+			refType = "branch"
+			refValue = "main"
 		}
 
 		discoverSecrets := config.SopsSecretsDiscovery || stackConfig.SopsSecretsDiscovery
@@ -121,9 +129,12 @@ func initStacks() error {
 
 		stateMu.Lock()
 		stacks = append(stacks, swarmStack)
-		stackStatus[stack] = &StackStatus{}
-		stackStatus[stack].RepoURL = stackRepo.url
-		stackStatus[stack].Ref = ref
+		stackStatus[stack] = &StackStatus{
+			RepoURL:     stackRepo.url,
+			RefType:     refType,
+			RefValue:    refValue,
+			ComposeFile: stackConfig.ComposeFile,
+		}
 		stateMu.Unlock()
 	}
 	return nil
