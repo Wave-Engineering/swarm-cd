@@ -25,6 +25,18 @@ type StackStatus struct {
 	LastDeployedAt *time.Time
 }
 
+// RuntimeInfo holds instance-level metadata set at startup.
+type RuntimeInfo struct {
+	BootedAt time.Time
+	Version  string
+}
+
+// Version is the application version, overridden at build time via
+// -ldflags "-X github.com/m-adawi/swarm-cd/swarmcd.Version=..."
+var Version = "dev"
+
+var runtimeInfo RuntimeInfo
+
 var config *util.Config = &util.Configs
 
 var logger *slog.Logger = util.Logger
@@ -34,6 +46,11 @@ var repos map[string]*stackRepo = map[string]*stackRepo{}
 var dockerCli *command.DockerCli
 
 func Init() (err error) {
+	runtimeInfo = RuntimeInfo{
+		BootedAt: time.Now(),
+		Version:  Version,
+	}
+
 	err = initRepos()
 	if err != nil {
 		return err

@@ -66,6 +66,11 @@ func updateStackThread(swarmStack *swarmStack, waitGroup *sync.WaitGroup) {
 	logger.Info(fmt.Sprintf("done updating %s stack", swarmStack.name))
 }
 
+// GetRuntimeInfo returns a copy of the instance's runtime metadata.
+func GetRuntimeInfo() RuntimeInfo {
+	return runtimeInfo
+}
+
 // GetStackStatus returns a snapshot of all stack statuses under a read lock.
 // Pointer fields (LastChangeAt, LastDeployedAt) are deep-copied so callers
 // cannot mutate the original values.

@@ -59,6 +59,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: echo "version=$(git describe --tags --always 2>/dev/null || echo dev)" >> $GITHUB_OUTPUT
 
       - name: Set lowercase repo name
         run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
@@ -78,7 +84,9 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
+          context: .
           platforms: linux/amd64
+          build-args: VERSION=${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}
@@ -108,6 +116,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: echo "version=$(git describe --tags --always 2>/dev/null || echo dev)" >> $GITHUB_OUTPUT
 
       - name: Set lowercase repo name
         run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
@@ -127,7 +141,9 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
+          context: .
           platforms: linux/arm64
+          build-args: VERSION=${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}

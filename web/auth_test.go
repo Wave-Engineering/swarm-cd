@@ -182,8 +182,8 @@ func TestGetHealth_ReturnsMutationApiEnabled(t *testing.T) {
 	if body["mutation_api_enabled"] != false {
 		t.Errorf("expected mutation_api_enabled=false when token not set, got %v", body["mutation_api_enabled"])
 	}
-	if body["status"] != "ok" {
-		t.Errorf("expected status=ok, got %v", body["status"])
+	if body["status"] != "healthy" {
+		t.Errorf("expected status=healthy, got %v", body["status"])
 	}
 
 	// Case 2: token set → mutation_api_enabled = true

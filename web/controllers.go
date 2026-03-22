@@ -1,12 +1,15 @@
 package web
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/m-adawi/swarm-cd/swarmcd"
+	"github.com/m-adawi/swarm-cd/util"
 )
 
 type stackResponse struct {
@@ -22,9 +25,41 @@ type stackResponse struct {
 }
 
 func getHealth(ctx *gin.Context) {
+	info := swarmcd.GetRuntimeInfo()
+	stacksStatus := swarmcd.GetStackStatus()
+	uptime := time.Since(info.BootedAt).Seconds()
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"status":               "ok",
-		"mutation_api_enabled": MutationAPIEnabled(),
+		"status":                  "healthy",
+		"booted_at":               info.BootedAt,
+		"version":                 info.Version,
+		"uptime_seconds":          math.Floor(uptime),
+		"update_interval_seconds": util.Configs.UpdateInterval,
+		"stacks_managed":          len(stacksStatus),
+		"mutation_api_enabled":    MutationAPIEnabled(),
+	})
+}
+
+func getStack(ctx *gin.Context) {
+	name := ctx.Param("name")
+	stacksStatus := swarmcd.GetStackStatus()
+	v, ok := stacksStatus[name]
+	if !ok {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": fmt.Sprintf("stack '%s' not found", name),
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, stackResponse{
+		Name:           name,
+		RepoURL:        v.RepoURL,
+		RefType:        v.RefType,
+		RefValue:       v.RefValue,
+		Revision:       v.Revision,
+		ComposeFile:    v.ComposeFile,
+		Error:          v.Error,
+		LastChangeAt:   v.LastChangeAt,
+		LastDeployedAt: v.LastDeployedAt,
 	})
 }
 

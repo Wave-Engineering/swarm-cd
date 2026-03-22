@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/m-adawi/swarm-cd/swarmcd"
+	"github.com/m-adawi/swarm-cd/util"
 )
 
 // stubGetStackStatus is used to inject test data into getStacks.
@@ -157,5 +158,225 @@ func TestGetStacks_SortOrder(t *testing.T) {
 		if stacks[i].Name != expected {
 			t.Errorf("position %d: expected %q, got %q", i, expected, stacks[i].Name)
 		}
+	}
+}
+
+// ---------- GET /stacks/:name tests ----------
+
+func TestGetStackByName_Found(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	now := time.Now().Truncate(time.Second)
+	earlier := now.Add(-1 * time.Hour)
+
+	cleanup := setupTestStacks(t, map[string]*swarmcd.StackStatus{
+		"my-stack": {
+			Error:          "",
+			Revision:       "abc12345",
+			RepoURL:        "https://github.com/example/repo",
+			RefType:        "branch",
+			RefValue:       "main",
+			ComposeFile:    "docker-compose.yaml",
+			LastChangeAt:   &earlier,
+			LastDeployedAt: &now,
+		},
+		"other-stack": {
+			Revision: "def67890",
+			RepoURL:  "https://github.com/example/other",
+			RefType:  "tag",
+			RefValue: "v1.0.0",
+		},
+	})
+	defer cleanup()
+
+	r := gin.New()
+	r.GET("/stacks/:name", getStack)
+
+	req := httptest.NewRequest(http.MethodGet, "/stacks/my-stack", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var s stackResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &s); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if s.Name != "my-stack" {
+		t.Errorf("expected name %q, got %q", "my-stack", s.Name)
+	}
+	if s.RepoURL != "https://github.com/example/repo" {
+		t.Errorf("expected repo_url %q, got %q", "https://github.com/example/repo", s.RepoURL)
+	}
+	if s.RefType != "branch" {
+		t.Errorf("expected ref_type %q, got %q", "branch", s.RefType)
+	}
+	if s.RefValue != "main" {
+		t.Errorf("expected ref_value %q, got %q", "main", s.RefValue)
+	}
+	if s.Revision != "abc12345" {
+		t.Errorf("expected revision %q, got %q", "abc12345", s.Revision)
+	}
+	if s.ComposeFile != "docker-compose.yaml" {
+		t.Errorf("expected compose_file %q, got %q", "docker-compose.yaml", s.ComposeFile)
+	}
+	if s.LastChangeAt == nil {
+		t.Fatal("expected last_change_at to be non-nil")
+	}
+	if !s.LastChangeAt.Equal(earlier) {
+		t.Errorf("expected last_change_at %v, got %v", earlier, *s.LastChangeAt)
+	}
+	if s.LastDeployedAt == nil {
+		t.Fatal("expected last_deployed_at to be non-nil")
+	}
+	if !s.LastDeployedAt.Equal(now) {
+		t.Errorf("expected last_deployed_at %v, got %v", now, *s.LastDeployedAt)
+	}
+}
+
+func TestGetStackByName_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cleanup := setupTestStacks(t, map[string]*swarmcd.StackStatus{
+		"existing-stack": {
+			Revision: "abc12345",
+			RepoURL:  "https://github.com/example/repo",
+			RefType:  "branch",
+			RefValue: "main",
+		},
+	})
+	defer cleanup()
+
+	r := gin.New()
+	r.GET("/stacks/:name", getStack)
+
+	req := httptest.NewRequest(http.MethodGet, "/stacks/foo", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", w.Code)
+	}
+
+	body := decodeBody(t, w)
+	expected := "stack 'foo' not found"
+	if body["error"] != expected {
+		t.Errorf("expected error %q, got %q", expected, body["error"])
+	}
+}
+
+// ---------- GET /health tests ----------
+
+func TestGetHealth_ReturnsBootTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	bootedAt := time.Now().Add(-5 * time.Minute).Truncate(time.Second)
+	cleanupRuntime := swarmcd.SetRuntimeInfoForTest(swarmcd.RuntimeInfo{
+		BootedAt: bootedAt,
+		Version:  "dev",
+	})
+	defer cleanupRuntime()
+
+	cleanupStacks := setupTestStacks(t, map[string]*swarmcd.StackStatus{})
+	defer cleanupStacks()
+
+	// Set update interval for the test
+	oldInterval := util.Configs.UpdateInterval
+	util.Configs.UpdateInterval = 120
+	defer func() { util.Configs.UpdateInterval = oldInterval }()
+
+	r := gin.New()
+	r.GET("/health", getHealth)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := decodeBody(t, w)
+
+	if body["status"] != "healthy" {
+		t.Errorf("expected status %q, got %q", "healthy", body["status"])
+	}
+
+	// Verify booted_at is present and parseable
+	bootedAtStr, ok := body["booted_at"].(string)
+	if !ok {
+		t.Fatalf("expected booted_at to be a string, got %T", body["booted_at"])
+	}
+	parsedBoot, err := time.Parse(time.RFC3339Nano, bootedAtStr)
+	if err != nil {
+		t.Fatalf("failed to parse booted_at %q: %v", bootedAtStr, err)
+	}
+	if !parsedBoot.Equal(bootedAt) {
+		t.Errorf("expected booted_at %v, got %v", bootedAt, parsedBoot)
+	}
+
+	// Verify uptime is positive
+	uptimeRaw, ok := body["uptime_seconds"].(float64)
+	if !ok {
+		t.Fatalf("expected uptime_seconds to be a number, got %T", body["uptime_seconds"])
+	}
+	if uptimeRaw <= 0 {
+		t.Errorf("expected positive uptime_seconds, got %v", uptimeRaw)
+	}
+
+	if body["version"] != "dev" {
+		t.Errorf("expected version %q, got %q", "dev", body["version"])
+	}
+
+	// Verify update_interval_seconds
+	if body["update_interval_seconds"] != float64(120) {
+		t.Errorf("expected update_interval_seconds=120, got %v", body["update_interval_seconds"])
+	}
+}
+
+func TestGetHealth_ReturnsStackCount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	bootedAt := time.Now().Add(-1 * time.Minute)
+	cleanupRuntime := swarmcd.SetRuntimeInfoForTest(swarmcd.RuntimeInfo{
+		BootedAt: bootedAt,
+		Version:  "1.2.3",
+	})
+	defer cleanupRuntime()
+
+	cleanupStacks := setupTestStacks(t, map[string]*swarmcd.StackStatus{
+		"stack-a": {Revision: "aaa", RepoURL: "https://github.com/a"},
+		"stack-b": {Revision: "bbb", RepoURL: "https://github.com/b"},
+		"stack-c": {Revision: "ccc", RepoURL: "https://github.com/c"},
+	})
+	defer cleanupStacks()
+
+	oldInterval := util.Configs.UpdateInterval
+	util.Configs.UpdateInterval = 60
+	defer func() { util.Configs.UpdateInterval = oldInterval }()
+
+	r := gin.New()
+	r.GET("/health", getHealth)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := decodeBody(t, w)
+
+	// Verify stacks_managed matches the actual count
+	if body["stacks_managed"] != float64(3) {
+		t.Errorf("expected stacks_managed=3, got %v", body["stacks_managed"])
+	}
+
+	if body["version"] != "1.2.3" {
+		t.Errorf("expected version %q, got %q", "1.2.3", body["version"])
 	}
 }

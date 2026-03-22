@@ -14,6 +14,7 @@ func init() {
 
 	// Read endpoints — no auth
 	router.GET("/stacks", getStacks)
+	router.GET("/stacks/:name", getStack)
 	router.GET("/health", getHealth)
 
 	// Static UI assets
