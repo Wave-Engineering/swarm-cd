@@ -4,9 +4,39 @@ import { StackStatus } from "../../src/hooks/useFetchStatuses"
 
 describe("StatusCardList", () => {
   const statuses: StackStatus[] = [
-    { Name: "Foobar", Error: "", Revision: "1.0.0", RepoURL: "https://www.url1.com", Ref: "branch:main" },
-    { Name: "FooFoo", Error: "", Revision: "2.0.0", RepoURL: "https://www.url2.com", Ref: "tag:v2.0.0" },
-    { Name: "Boobaz", Error: "Oh no!!!", Revision: "2.0.0", RepoURL: "https://www.url3.com", Ref: "branch:develop" }
+    {
+      name: "Foobar",
+      error: "",
+      revision: "1.0.0",
+      repo_url: "https://www.url1.com",
+      ref_type: "branch",
+      ref_value: "main",
+      compose_file: "docker-compose.yml",
+      last_change_at: "2026-03-22T10:00:00Z",
+      last_deployed_at: "2026-03-22T10:01:00Z"
+    },
+    {
+      name: "FooFoo",
+      error: "",
+      revision: "2.0.0",
+      repo_url: "https://www.url2.com",
+      ref_type: "tag",
+      ref_value: "v2.0.0",
+      compose_file: "docker-compose.yml",
+      last_change_at: "2026-03-21T08:00:00Z",
+      last_deployed_at: "2026-03-21T08:01:00Z"
+    },
+    {
+      name: "Boobaz",
+      error: "Oh no!!!",
+      revision: "2.0.0",
+      repo_url: "https://www.url3.com",
+      ref_type: "branch",
+      ref_value: "develop",
+      compose_file: "docker-compose.yml",
+      last_change_at: "2026-03-20T14:00:00Z",
+      last_deployed_at: "2026-03-20T14:01:00Z"
+    }
   ]
 
   it("should render no statuses if the list of statuses is empty", () => {
@@ -17,13 +47,13 @@ describe("StatusCardList", () => {
   it("should render a list of statuses", () => {
     render(<StatusCardList statuses={statuses} query="" />)
     for (const status of statuses) {
-      expect(screen.getByText(status.Name)).toBeInTheDocument()
+      expect(screen.getByText(status.name)).toBeInTheDocument()
     }
   })
 
   it("should filter out the whole list of statuses if query is not found", () => {
     render(<StatusCardList statuses={statuses} query="NOT FOUND!!!" />)
-    for(const query of ["Foobar", "FooFoo", "Boobaz"]) {
+    for (const query of ["Foobar", "FooFoo", "Boobaz"]) {
       expect(screen.queryByText(query)).not.toBeInTheDocument()
     }
     expect(screen.getByText(/No items/i)).toBeInTheDocument()

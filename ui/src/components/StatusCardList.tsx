@@ -21,7 +21,17 @@ function StatusCardList({ statuses, query }: Readonly<{ statuses: StackStatus[];
         </Text>
       ) : (
         filteredStatuses.map((item, index) => (
-          <StatusCard key={index} name={item.Name} error={item.Error} revision={item.Revision} repoURL={item.RepoURL} gitRef={item.Ref} />
+          <StatusCard
+            key={index}
+            name={item.name}
+            error={item.error}
+            revision={item.revision}
+            repo_url={item.repo_url}
+            ref_type={item.ref_type}
+            ref_value={item.ref_value}
+            last_change_at={item.last_change_at}
+            last_deployed_at={item.last_deployed_at}
+          />
         ))
       )}
     </>

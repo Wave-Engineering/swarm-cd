@@ -1,23 +1,35 @@
 [
   {
-    "Name": "Project Alpha",
-    "Error": "",
-    "Revision": "v1.0.1",
-    "RepoURL": "https://github.com/user/project-alpha",
-    "Ref": "branch:main"
+    "name": "Project Alpha",
+    "error": "",
+    "revision": "v1.0.1",
+    "repo_url": "https://github.com/user/project-alpha",
+    "ref_type": "branch",
+    "ref_value": "main",
+    "compose_file": "docker-compose.yml",
+    "last_change_at": "2026-03-22T10:30:00Z",
+    "last_deployed_at": "2026-03-22T10:31:00Z"
   },
   {
-    "Name": "Project Beta",
-    "Error": "Failed to build",
-    "Revision": "v2.3.4",
-    "RepoURL": "https://github.com/user/project-beta",
-    "Ref": "tag:v2.3.4"
+    "name": "Project Beta",
+    "error": "Failed to build",
+    "revision": "v2.3.4",
+    "repo_url": "https://github.com/user/project-beta",
+    "ref_type": "tag",
+    "ref_value": "v2.3.4",
+    "compose_file": "docker-compose.yml",
+    "last_change_at": "2026-03-21T08:15:00Z",
+    "last_deployed_at": "2026-03-21T08:16:00Z"
   },
   {
-    "Name": "Project Gamma",
-    "Error": "",
-    "Revision": "v0.9.8",
-    "RepoURL": "https://github.com/user/project-gamma",
-    "Ref": "branch:develop"
+    "name": "Project Gamma",
+    "error": "",
+    "revision": "v0.9.8",
+    "repo_url": "https://github.com/user/project-gamma",
+    "ref_type": "branch",
+    "ref_value": "develop",
+    "compose_file": "docker-compose.prod.yml",
+    "last_change_at": "2026-03-20T14:00:00Z",
+    "last_deployed_at": "2026-03-20T14:02:00Z"
   }
 ]
