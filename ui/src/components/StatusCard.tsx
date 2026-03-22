@@ -1,18 +1,25 @@
 import { Box, Grid, Link, Text, TextProps } from "@chakra-ui/react"
 import React from "react"
+import { formatTimestamp } from "../utils/formatTimestamp"
 
 function StatusCard({
   name,
   error,
   revision,
-  repoURL,
-  gitRef
+  repo_url,
+  ref_type,
+  ref_value,
+  last_change_at,
+  last_deployed_at
 }: Readonly<{
   name: string
   error: string
   revision: string
-  repoURL: string
-  gitRef: string
+  repo_url: string
+  ref_type: string
+  ref_value: string
+  last_change_at: string
+  last_deployed_at: string
 }>): React.ReactElement {
   return (
     <Box borderWidth="1px" borderRadius="sm" overflow="hidden" p={4} boxShadow="lg">
@@ -28,15 +35,21 @@ function StatusCard({
         )}
 
         <KeyText>Watching:</KeyText>
-        <Text>{gitRef}</Text>
+        <Text>{ref_type}:{ref_value}</Text>
 
         <KeyText>Revision:</KeyText>
         <Text>{revision}</Text>
 
         <KeyText>Repo URL:</KeyText>
-        <Link color="teal.500" href={repoURL} isExternal>
-          {repoURL}
+        <Link color="teal.500" href={repo_url} isExternal>
+          {repo_url}
         </Link>
+
+        <KeyText>Last Change:</KeyText>
+        <Text>{formatTimestamp(last_change_at)}</Text>
+
+        <KeyText>Last Deployed:</KeyText>
+        <Text>{formatTimestamp(last_deployed_at)}</Text>
       </Grid>
     </Box>
   )

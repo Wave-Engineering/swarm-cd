@@ -2,11 +2,15 @@ import { useEffect, useState } from "react"
 import devData from "./dummyStackStatuses.json"
 
 export interface StackStatus {
-  Name: string
-  Error: string
-  Revision: string
-  RepoURL: string
-  Ref: string
+  name: string
+  error: string
+  revision: string
+  repo_url: string
+  ref_type: string
+  ref_value: string
+  compose_file: string
+  last_change_at: string
+  last_deployed_at: string
 }
 
 async function fetchFromServer(): Promise<StackStatus[]> {
