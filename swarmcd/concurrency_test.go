@@ -27,7 +27,8 @@ func TestConcurrentStatusRead(t *testing.T) {
 		stacks = append(stacks, s)
 		stackStatus[name] = &StackStatus{
 			RepoURL:  "http://example.com",
-			Ref:      "branch:main",
+			RefType:  "branch",
+			RefValue: "main",
 			Revision: "abc12345",
 		}
 	}
@@ -59,7 +60,8 @@ func TestConcurrentStatusRead(t *testing.T) {
 					_ = v.Error
 					_ = v.Revision
 					_ = v.RepoURL
-					_ = v.Ref
+					_ = v.RefType
+					_ = v.RefValue
 				}
 			}
 		}()
@@ -103,7 +105,8 @@ func TestGetStackStatusReturnsSnapshot(t *testing.T) {
 			Error:    "",
 			Revision: "aabb1122",
 			RepoURL:  "http://example.com",
-			Ref:      "branch:main",
+			RefType:  "branch",
+			RefValue: "main",
 		},
 	}
 	stacks = nil
@@ -151,8 +154,9 @@ func TestLockOrderingNoDeadlock(t *testing.T) {
 		repos[i] = repo
 		stacks = append(stacks, newSwarmStack(name, repo, "main", "", "docker-compose.yaml", nil, "", false))
 		stackStatus[name] = &StackStatus{
-			RepoURL: "http://example.com",
-			Ref:     "branch:main",
+			RepoURL:  "http://example.com",
+			RefType:  "branch",
+			RefValue: "main",
 		}
 	}
 	stateMu.Unlock()

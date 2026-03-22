@@ -42,6 +42,8 @@ func updateStackThread(swarmStack *swarmStack, waitGroup *sync.WaitGroup) {
 	revision, err := swarmStack.updateStack()
 	repoLock.Unlock() // Release repo.lock BEFORE acquiring stateMu
 
+	now := time.Now()
+
 	stateMu.Lock()
 	if err != nil {
 		stackStatus[swarmStack.name].Error = err.Error()
@@ -50,19 +52,37 @@ func updateStackThread(swarmStack *swarmStack, waitGroup *sync.WaitGroup) {
 		return
 	}
 
-	stackStatus[swarmStack.name].Error = ""
-	stackStatus[swarmStack.name].Revision = revision
+	status := stackStatus[swarmStack.name]
+
+	// Set LastChangeAt when the revision changes
+	if revision != status.Revision {
+		status.LastChangeAt = &now
+	}
+
+	status.Error = ""
+	status.Revision = revision
+	status.LastDeployedAt = &now
 	stateMu.Unlock()
 	logger.Info(fmt.Sprintf("done updating %s stack", swarmStack.name))
 }
 
 // GetStackStatus returns a snapshot of all stack statuses under a read lock.
+// Pointer fields (LastChangeAt, LastDeployedAt) are deep-copied so callers
+// cannot mutate the original values.
 func GetStackStatus() map[string]*StackStatus {
 	stateMu.RLock()
 	defer stateMu.RUnlock()
 	snapshot := make(map[string]*StackStatus, len(stackStatus))
 	for k, v := range stackStatus {
 		cp := *v
+		if v.LastChangeAt != nil {
+			t := *v.LastChangeAt
+			cp.LastChangeAt = &t
+		}
+		if v.LastDeployedAt != nil {
+			t := *v.LastDeployedAt
+			cp.LastDeployedAt = &t
+		}
 		snapshot[k] = &cp
 	}
 	return snapshot
