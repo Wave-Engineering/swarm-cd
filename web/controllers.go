@@ -8,6 +8,13 @@ import (
 	"github.com/m-adawi/swarm-cd/swarmcd"
 )
 
+func getHealth(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"status":               "ok",
+		"mutation_api_enabled": MutationAPIEnabled(),
+	})
+}
+
 func getStacks(ctx *gin.Context) {
 	stacksStatus := swarmcd.GetStackStatus()
 	var stacks []map[string]string
