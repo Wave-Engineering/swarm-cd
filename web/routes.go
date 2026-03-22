@@ -27,6 +27,7 @@ func init() {
 	// Write endpoints — auth required
 	write := router.Group("/")
 	write.Use(authMiddleware())
+	write.PATCH("/stacks/:name", patchStack)
 	write.POST("/stacks/:name/restart", restartStack)
 	write.POST("/stacks/:name/services/:service/restart", restartService)
 	write.POST("/restart", restartAll)

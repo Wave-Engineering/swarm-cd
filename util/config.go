@@ -3,25 +3,27 @@ package util
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 type StackConfig struct {
-	Repo                 string
-	Branch               string
-	Tag                  string
-	ComposeFile          string   `mapstructure:"compose_file"`
-	ValuesFile           string   `mapstructure:"values_file"`
-	SopsFiles            []string `mapstructure:"sops_files"`
-	SopsSecretsDiscovery bool     `mapstructure:"sops_secrets_discovery"`
+	Repo                 string   `mapstructure:"repo" yaml:"repo,omitempty"`
+	Branch               string   `mapstructure:"branch" yaml:"branch,omitempty"`
+	Tag                  string   `mapstructure:"tag" yaml:"tag,omitempty"`
+	ComposeFile          string   `mapstructure:"compose_file" yaml:"compose_file,omitempty"`
+	ValuesFile           string   `mapstructure:"values_file" yaml:"values_file,omitempty"`
+	SopsFiles            []string `mapstructure:"sops_files" yaml:"sops_files,omitempty"`
+	SopsSecretsDiscovery bool     `mapstructure:"sops_secrets_discovery" yaml:"sops_secrets_discovery,omitempty"`
 }
 
 type RepoConfig struct {
-	Url          string
-	Username     string
-	Password     string
-	PasswordFile string `mapstructure:"password_file"`
+	Url          string `mapstructure:"url" yaml:"url,omitempty"`
+	Username     string `mapstructure:"username" yaml:"username,omitempty"`
+	Password     string `mapstructure:"password" yaml:"password,omitempty"`
+	PasswordFile string `mapstructure:"password_file" yaml:"password_file,omitempty"`
 }
 
 type Config struct {
@@ -92,4 +94,35 @@ func readStackConfigs() (err error) {
 		return
 	}
 	return stacksViper.Unmarshal(&Configs.StackConfigs)
+}
+
+// PersistConfigs writes the current RepoConfigs and StackConfigs to split
+// YAML files (repos.yaml and stacks.yaml) using atomic writes. Each file is
+// first written to a .tmp suffix, then renamed into place.
+func PersistConfigs() error {
+	if err := atomicWriteYAML("repos.yaml", Configs.RepoConfigs); err != nil {
+		return fmt.Errorf("could not persist repos config: %w", err)
+	}
+	if err := atomicWriteYAML("stacks.yaml", Configs.StackConfigs); err != nil {
+		return fmt.Errorf("could not persist stacks config: %w", err)
+	}
+	return nil
+}
+
+// atomicWriteYAML marshals data to YAML, writes it to path+".tmp", then
+// renames the temp file to the final path.
+func atomicWriteYAML(path string, data interface{}) error {
+	b, err := yaml.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("could not marshal yaml: %w", err)
+	}
+
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, b, 0644); err != nil {
+		return fmt.Errorf("could not write temp file %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("could not rename %s to %s: %w", tmpPath, path, err)
+	}
+	return nil
 }

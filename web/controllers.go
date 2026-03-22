@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -83,4 +84,49 @@ func getStacks(ctx *gin.Context) {
 		return stacks[i].Name < stacks[j].Name
 	})
 	ctx.JSON(http.StatusOK, stacks)
+}
+
+func patchStack(ctx *gin.Context) {
+	name := ctx.Param("name")
+
+	var req swarmcd.PatchRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		return
+	}
+
+	result, err := swarmcd.PatchStack(name, req)
+	if err != nil {
+		var valErr *swarmcd.ValidationError
+		var notFoundErr *swarmcd.NotFoundError
+		if errors.As(err, &valErr) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": valErr.Msg})
+			return
+		}
+		if errors.As(err, &notFoundErr) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": notFoundErr.Msg})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := gin.H{
+		"stack": stackResponse{
+			Name:           name,
+			RepoURL:        result.Status.RepoURL,
+			RefType:        result.Status.RefType,
+			RefValue:       result.Status.RefValue,
+			Revision:       result.Status.Revision,
+			ComposeFile:    result.Status.ComposeFile,
+			Error:          result.Status.Error,
+			LastChangeAt:   result.Status.LastChangeAt,
+			LastDeployedAt: result.Status.LastDeployedAt,
+		},
+	}
+	if result.Warning != "" {
+		resp["warning"] = result.Warning
+	}
+
+	ctx.JSON(http.StatusOK, resp)
 }
