@@ -30,7 +30,7 @@ func getHealth(ctx *gin.Context) {
 	stacksStatus := swarmcd.GetStackStatus()
 	uptime := time.Since(info.BootedAt).Seconds()
 
-	ctx.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"status":                  "healthy",
 		"booted_at":               info.BootedAt,
 		"version":                 info.Version,
@@ -38,7 +38,13 @@ func getHealth(ctx *gin.Context) {
 		"update_interval_seconds": util.Configs.UpdateInterval,
 		"stacks_managed":          len(stacksStatus),
 		"mutation_api_enabled":    MutationAPIEnabled(),
-	})
+	}
+
+	if warnings := util.ConfigWarnings(); len(warnings) > 0 {
+		resp["config_warnings"] = warnings
+	}
+
+	ctx.JSON(http.StatusOK, resp)
 }
 
 func getStack(ctx *gin.Context) {

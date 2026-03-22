@@ -380,3 +380,103 @@ func TestGetHealth_ReturnsStackCount(t *testing.T) {
 		t.Errorf("expected version %q, got %q", "1.2.3", body["version"])
 	}
 }
+
+// ---------- GET /health config_warnings tests ----------
+
+func TestGetHealth_ReturnsConfigWarnings(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	bootedAt := time.Now().Add(-1 * time.Minute)
+	cleanupRuntime := swarmcd.SetRuntimeInfoForTest(swarmcd.RuntimeInfo{
+		BootedAt: bootedAt,
+		Version:  "dev",
+	})
+	defer cleanupRuntime()
+
+	cleanupStacks := setupTestStacks(t, map[string]*swarmcd.StackStatus{})
+	defer cleanupStacks()
+
+	oldInterval := util.Configs.UpdateInterval
+	util.Configs.UpdateInterval = 120
+	defer func() { util.Configs.UpdateInterval = oldInterval }()
+
+	// Simulate inline config conflict (stacks inline, no split file)
+	oldConflict := util.Conflict
+	util.Conflict = util.ConfigConflict{
+		StacksInline:     true,
+		ReposInline:      false,
+		StacksFileExists: false,
+		ReposFileExists:  false,
+	}
+	defer func() { util.Conflict = oldConflict }()
+
+	r := gin.New()
+	r.GET("/health", getHealth)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := decodeBody(t, w)
+
+	// Verify config_warnings is present and contains expected warning
+	rawWarnings, ok := body["config_warnings"]
+	if !ok {
+		t.Fatal("expected config_warnings key in health response")
+	}
+	warnings, ok := rawWarnings.([]interface{})
+	if !ok {
+		t.Fatalf("expected config_warnings to be an array, got %T", rawWarnings)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	if warnings[0] != "API changes to stacks won't persist across restarts" {
+		t.Errorf("unexpected warning: %v", warnings[0])
+	}
+}
+
+func TestGetHealth_NoConfigWarnings(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	bootedAt := time.Now().Add(-1 * time.Minute)
+	cleanupRuntime := swarmcd.SetRuntimeInfoForTest(swarmcd.RuntimeInfo{
+		BootedAt: bootedAt,
+		Version:  "dev",
+	})
+	defer cleanupRuntime()
+
+	cleanupStacks := setupTestStacks(t, map[string]*swarmcd.StackStatus{})
+	defer cleanupStacks()
+
+	oldInterval := util.Configs.UpdateInterval
+	util.Configs.UpdateInterval = 120
+	defer func() { util.Configs.UpdateInterval = oldInterval }()
+
+	// No conflicts — split config only
+	oldConflict := util.Conflict
+	util.Conflict = util.ConfigConflict{}
+	defer func() { util.Conflict = oldConflict }()
+
+	r := gin.New()
+	r.GET("/health", getHealth)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := decodeBody(t, w)
+
+	// Verify config_warnings is NOT present when there are no conflicts
+	if _, ok := body["config_warnings"]; ok {
+		t.Error("expected no config_warnings key when there are no conflicts")
+	}
+}
