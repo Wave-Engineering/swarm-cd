@@ -18,10 +18,7 @@ import (
 // and returns a cleanup function to restore the original state.
 func setupTestStacks(t *testing.T, data map[string]*swarmcd.StackStatus) func() {
 	t.Helper()
-	swarmcd.SetStackStatusForTest(data)
-	return func() {
-		swarmcd.SetStackStatusForTest(map[string]*swarmcd.StackStatus{})
-	}
+	return swarmcd.SetStackStatusForTest(data)
 }
 
 func TestGetStacks_ReturnsAllFields(t *testing.T) {
