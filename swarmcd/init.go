@@ -118,10 +118,13 @@ func initStacks() error {
 
 		discoverSecrets := config.SopsSecretsDiscovery || stackConfig.SopsSecretsDiscovery
 		swarmStack := newSwarmStack(stack, stackRepo, branch, tag, stackConfig.ComposeFile, stackConfig.SopsFiles, stackConfig.ValuesFile, discoverSecrets)
+
+		stateMu.Lock()
 		stacks = append(stacks, swarmStack)
 		stackStatus[stack] = &StackStatus{}
 		stackStatus[stack].RepoURL = stackRepo.url
 		stackStatus[stack].Ref = ref
+		stateMu.Unlock()
 	}
 	return nil
 }
