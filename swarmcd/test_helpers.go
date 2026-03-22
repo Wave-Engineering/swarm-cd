@@ -1,10 +1,20 @@
 package swarmcd
 
-// SetStackStatusForTest replaces the package-level stackStatus map with the
-// provided data. It is intended for use in tests only. The caller is
-// responsible for restoring the original state after the test.
-func SetStackStatusForTest(data map[string]*StackStatus) {
+// SetStackStatusForTest replaces the internal stackStatus map with the given
+// test data and returns a cleanup function that restores the original state.
+// This is intended for use in tests only.
+func SetStackStatusForTest(testStatus map[string]*StackStatus) func() {
 	stateMu.Lock()
-	defer stateMu.Unlock()
-	stackStatus = data
+	oldStatus := stackStatus
+	oldStacks := stacks
+	stackStatus = testStatus
+	stacks = nil
+	stateMu.Unlock()
+
+	return func() {
+		stateMu.Lock()
+		stackStatus = oldStatus
+		stacks = oldStacks
+		stateMu.Unlock()
+	}
 }

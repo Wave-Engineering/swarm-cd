@@ -26,9 +26,9 @@ func init() {
 	// Write endpoints — auth required
 	write := router.Group("/")
 	write.Use(authMiddleware())
-	// Write routes will be registered here by later issues
-	// (e.g. PATCH /stacks/:name, POST /stacks/:name/restart, etc.)
-	_ = write
+	write.POST("/stacks/:name/restart", restartStack)
+	write.POST("/stacks/:name/services/:service/restart", restartService)
+	write.POST("/restart", restartAll)
 }
 
 func RunServer(address string) error {
