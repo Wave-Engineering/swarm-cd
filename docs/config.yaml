@@ -15,12 +15,18 @@ sops_secrets_discovery: true
 # and secret names
 auto_rotate: true
 
-# You can define repos here instead of 
-# defining a separate repos.yaml file
+# You can define repos here instead of
+# defining a separate repos.yaml file.
+# WARNING: Defining repos inline prevents the REST API (PATCH)
+# from persisting changes across restarts. Use repos.yaml instead
+# if you plan to modify repos via the API.
 repos:
 
-# You can define stacks here instead of 
-# defining a separate stacks.yaml file
+# You can define stacks here instead of
+# defining a separate stacks.yaml file.
+# WARNING: Defining stacks inline prevents the REST API (PATCH)
+# from persisting changes across restarts. Use stacks.yaml instead
+# if you plan to modify stacks via the API.
 stacks:
 
 # The WEB UI address
