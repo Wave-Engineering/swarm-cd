@@ -54,14 +54,14 @@ func updateStackThread(swarmStack *swarmStack, waitGroup *sync.WaitGroup) {
 
 	status := stackStatus[swarmStack.name]
 
-	// Set LastChangeAt when the revision changes
+	// Update timestamps only when the revision actually changes
 	if revision != status.Revision {
 		status.LastChangeAt = &now
+		status.LastDeployedAt = &now
 	}
 
 	status.Error = ""
 	status.Revision = revision
-	status.LastDeployedAt = &now
 	stateMu.Unlock()
 	logger.Info(fmt.Sprintf("done updating %s stack", swarmStack.name))
 }
