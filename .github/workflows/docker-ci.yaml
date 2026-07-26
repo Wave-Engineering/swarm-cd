@@ -124,6 +124,11 @@ jobs:
           context: .
           platforms: linux/amd64
           build-args: VERSION=${{ steps.version.outputs.version }}
+          # Lowercase OCI provenance labels, baked into the amd64 image config (swarm-cd
+          # has no metadata-action; hardcode them lowercase for the Docker Hub mirror).
+          labels: |
+            org.opencontainers.image.source=https://github.com/wave-engineering/swarm-cd
+            org.opencontainers.image.url=https://github.com/wave-engineering/swarm-cd
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}
@@ -192,6 +197,11 @@ jobs:
           context: .
           platforms: linux/arm64
           build-args: VERSION=${{ steps.version.outputs.version }}
+          # Lowercase OCI provenance labels, baked into the arm64 image config (matches
+          # the amd64 build so both arches carry the same source/url for the Docker Hub mirror).
+          labels: |
+            org.opencontainers.image.source=https://github.com/wave-engineering/swarm-cd
+            org.opencontainers.image.url=https://github.com/wave-engineering/swarm-cd
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}
@@ -251,3 +261,33 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ghcr.io/${{ env.REPO_LC }}:latest
+
+      - name: Log in to Docker Hub
+        # OAT-safe here: push-manifest only runs imagetools against already-pushed GHCR
+        # digests — no docker.io base pull happens in this job, so the oakandwave-scoped
+        # token is never asked to pull node/golang/alpine (that all happened in the build
+        # jobs, which do NOT log into Docker Hub). See flightdeck #20.
+        uses: docker/login-action@v3
+        with:
+          username: oakandwave
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Mirror multi-arch manifest to Docker Hub oakandwave
+        # Copy the assembled GHCR manifest list cross-registry (blobs + manifest) to
+        # docker.io/oakandwave. No rebuild; per-registry creds.
+        run: |
+          docker buildx imagetools create \
+            -t docker.io/oakandwave/swarm-cd:latest \
+            -t docker.io/oakandwave/swarm-cd:${{ needs.release.outputs.new_release_version }} \
+            ghcr.io/${{ env.REPO_LC }}:${{ needs.release.outputs.new_release_version }}
+
+      - name: Docker Scout — CVE scan the pushed image
+        # Non-blocking; continue-on-error covers ALL failures (auth/infra) so a Scout error
+        # can't red a release whose dual-push already succeeded (flightdeck #20 review).
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: docker.io/oakandwave/swarm-cd:${{ needs.release.outputs.new_release_version }}
+          only-severities: critical,high
+          write-comment: false
