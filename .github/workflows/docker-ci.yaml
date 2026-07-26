@@ -124,6 +124,11 @@ jobs:
           context: .
           platforms: linux/amd64
           build-args: VERSION=${{ steps.version.outputs.version }}
+          # Lowercase OCI provenance labels, baked into the amd64 image config (swarm-cd
+          # has no metadata-action; hardcode them lowercase for the Docker Hub mirror).
+          labels: |
+            org.opencontainers.image.source=https://github.com/wave-engineering/swarm-cd
+            org.opencontainers.image.url=https://github.com/wave-engineering/swarm-cd
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}
@@ -192,6 +197,11 @@ jobs:
           context: .
           platforms: linux/arm64
           build-args: VERSION=${{ steps.version.outputs.version }}
+          # Lowercase OCI provenance labels, baked into the arm64 image config (matches
+          # the amd64 build so both arches carry the same source/url for the Docker Hub mirror).
+          labels: |
+            org.opencontainers.image.source=https://github.com/wave-engineering/swarm-cd
+            org.opencontainers.image.url=https://github.com/wave-engineering/swarm-cd
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
           outputs: type=image,name=ghcr.io/${{ env.REPO_LC }},push-by-digest=true,name-canonical=true,push=${{ github.ref_name == 'main' }}
@@ -218,8 +228,18 @@ jobs:
     if: ${{ github.ref_name == 'main' && needs.release.outputs.new_release_published == 'true' }}
     runs-on: ubuntu-latest
     permissions:
+      # `contents: read` must be explicit: naming ANY permission sets every unnamed one to
+      # `none`, and this job now checks out the repo (for scripts/ci/ below). Matches the
+      # three sibling repos already on this action.
+      contents: read
       packages: write
+      id-token: write # keyless cosign (Fulcio/Rekor) via the shared oaw-sign-image action
     steps:
+      - name: Checkout
+        # This job previously needed no checkout (it only assembles manifests from the build
+        # jobs' digest artifacts), but scripts/ci/resolve-index-digest.sh below is a repo file.
+        uses: actions/checkout@v4
+
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -251,3 +271,73 @@ jobs:
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ghcr.io/${{ env.REPO_LC }}:latest
+
+      - name: Resolve the manifest-list digest
+        # `imagetools create` does not expose the digest of the index it just created, so
+        # resolve it explicitly -- the sign steps below must target an immutable digest, not
+        # a tag (the shared action hard-refuses any ref lacking @sha256:, so a mistake here
+        # fails loudly rather than signing whatever the tag later points at).
+        #
+        # This is the INDEX digest, and it is deliberately the thing we sign: a consumer
+        # pulls the tag, which resolves to the index, so one signature on the index covers
+        # both arches. Signing the per-arch child digests in the build jobs instead would
+        # leave `cosign verify <tag>` finding nothing.
+        #
+        # The script (not an inline run block) carries the buildx --format caveat and the
+        # sha256 guard, and is locally testable against a real registry.
+        #
+        # Invoked via `bash`, not a direct exec, so this never depends on the execute bit
+        # surviving checkout -- a mode loss would fail exit 126 only on a real release (this
+        # job never runs on a PR), and the shared action encodes the same lesson.
+        id: digest
+        run: bash ./scripts/ci/resolve-index-digest.sh "ghcr.io/${REPO_LC}:${VERSION}"
+        env:
+          VERSION: ${{ needs.release.outputs.new_release_version }}
+
+      - name: Sign the GHCR manifest list (cosign keyless + SBOM)
+        # Consumer of cc-workflow's reusable oaw-sign-image action (fleet signing). The GHCR
+        # login above is active and this job's id-token grants OIDC. SBOM goes to rekor (the
+        # action default): syft over this index measures ~662 KB / 234 packages, well under
+        # rekor's request-body ceiling, so the TSA path (cc-workflow #995) is not needed.
+        uses: wave-engineering/claudecode-workflow/.github/actions/oaw-sign-image@21f10ce601b9340b30fd6df0b4a2e4bd663fe249
+        with:
+          digest-ref: ghcr.io/${{ env.REPO_LC }}@${{ steps.digest.outputs.digest }}
+
+      - name: Log in to Docker Hub
+        # OAT-safe here: push-manifest only runs imagetools against already-pushed GHCR
+        # digests — no docker.io base pull happens in this job, so the oakandwave-scoped
+        # token is never asked to pull node/golang/alpine (that all happened in the build
+        # jobs, which do NOT log into Docker Hub). See flightdeck #20.
+        uses: docker/login-action@v3
+        with:
+          username: oakandwave
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Mirror multi-arch manifest to Docker Hub oakandwave
+        # Copy the assembled GHCR manifest list cross-registry (blobs + manifest) to
+        # docker.io/oakandwave. No rebuild; per-registry creds.
+        run: |
+          docker buildx imagetools create \
+            -t docker.io/oakandwave/swarm-cd:latest \
+            -t docker.io/oakandwave/swarm-cd:${{ needs.release.outputs.new_release_version }} \
+            ghcr.io/${{ env.REPO_LC }}:${{ needs.release.outputs.new_release_version }}
+
+      - name: Sign the Docker Hub manifest list (cosign keyless + SBOM)
+        # `imagetools create` copies the index content-identically, so the Docker Hub index
+        # digest equals the GHCR one (verified: sha256:a2addc5d... on both registries) -- but
+        # cosign signatures are registry+digest-bound, so the mirror needs its own signature.
+        # The Docker Hub login above is active.
+        uses: wave-engineering/claudecode-workflow/.github/actions/oaw-sign-image@21f10ce601b9340b30fd6df0b4a2e4bd663fe249
+        with:
+          digest-ref: docker.io/oakandwave/swarm-cd@${{ steps.digest.outputs.digest }}
+
+      - name: Docker Scout — CVE scan the pushed image
+        # Non-blocking; continue-on-error covers ALL failures (auth/infra) so a Scout error
+        # can't red a release whose dual-push already succeeded (flightdeck #20 review).
+        continue-on-error: true
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: docker.io/oakandwave/swarm-cd:${{ needs.release.outputs.new_release_version }}
+          only-severities: critical,high
+          write-comment: false
