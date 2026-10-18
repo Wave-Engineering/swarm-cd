@@ -545,3 +545,75 @@ my-repo:
 		}
 	}
 }
+
+// ---------- resolve_image ----------
+
+// loadConfigWith runs LoadConfigs in a temp dir holding the given config.yaml and minimal
+// split repos.yaml and stacks.yaml, and restores the package state afterwards.
+func loadConfigWith(t *testing.T, cfgYAML string) error {
+	t.Helper()
+	dir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	origConfigs := Configs
+	origConflict := Conflict
+	t.Cleanup(func() {
+		Configs = origConfigs
+		Conflict = origConflict
+	})
+
+	files := map[string]string{
+		"config.yaml": cfgYAML,
+		"repos.yaml":  "my-repo:\n  url: https://example.com/repo\n",
+		"stacks.yaml": "my-stack:\n  repo: my-repo\n  branch: main\n",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(name, []byte(body), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	Configs = Config{}
+	return LoadConfigs()
+}
+
+// TestResolveImageDefault verifies that a config.yaml without resolve_image keeps
+// docker's own default, so existing deployments behave exactly as before.
+func TestResolveImageDefault(t *testing.T) {
+	if err := loadConfigWith(t, "update_interval: 60\n"); err != nil {
+		t.Fatalf("LoadConfigs: %v", err)
+	}
+	if Configs.ResolveImage != "always" {
+		t.Errorf("expected ResolveImage %q, got %q", "always", Configs.ResolveImage)
+	}
+}
+
+// TestResolveImageChanged verifies that resolve_image is read from config.yaml.
+func TestResolveImageChanged(t *testing.T) {
+	if err := loadConfigWith(t, "update_interval: 60\nresolve_image: changed\n"); err != nil {
+		t.Fatalf("LoadConfigs: %v", err)
+	}
+	if Configs.ResolveImage != "changed" {
+		t.Errorf("expected ResolveImage %q, got %q", "changed", Configs.ResolveImage)
+	}
+}
+
+// TestResolveImageInvalid verifies that an unknown resolve_image fails at startup with
+// an error naming the key and the allowed values, never a silent fallback.
+func TestResolveImageInvalid(t *testing.T) {
+	for _, bad := range []string{"sometimes", `""`, "Changed"} {
+		err := loadConfigWith(t, "resolve_image: "+bad+"\n")
+		if err == nil {
+			t.Errorf("resolve_image: %s: expected an error, got none", bad)
+			continue
+		}
+		for _, want := range []string{"resolve_image", "always, changed, never"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("resolve_image: %s: error %q does not mention %q", bad, err, want)
+			}
+		}
+	}
+}

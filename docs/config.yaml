@@ -15,6 +15,27 @@ sops_secrets_discovery: true
 # and secret names
 auto_rotate: true
 
+# Passed to `docker stack deploy --resolve-image` on every
+# update cycle: always | changed | never (default: always).
+# - always: ask the registry for every service's image on every
+#   cycle, and follow a mutable tag (e.g. :latest) when it moves.
+# - changed: ask only for a service that is new or whose `image:`
+#   changed in the compose file. An unchanged cycle makes no
+#   registry requests; a moved mutable tag is not picked up until
+#   the compose changes.
+# - never: never ask. A new or changed `image:` is used as written;
+#   otherwise the service keeps the image it is running.
+# The stack is re-applied every cycle in every mode, so drift is
+# still reverted, with two exceptions under changed and never:
+# - an image set out of band (`docker service update --image`) is
+#   kept until the compose file's `image:` changes;
+# - a service's platform placement comes only from asking the
+#   registry, so a cycle that does not ask clears it. On a swarm
+#   with mixed CPU architectures, use always or add
+#   `node.platform.arch` placement constraints.
+# Any other value stops SwarmCD at startup.
+resolve_image: always
+
 # You can define repos here instead of
 # defining a separate repos.yaml file.
 # WARNING: Defining repos inline prevents the REST API (PATCH)

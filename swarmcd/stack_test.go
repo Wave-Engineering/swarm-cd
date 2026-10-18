@@ -1,9 +1,66 @@
 package swarmcd
 
 import (
+	"slices"
 	"sync"
 	"testing"
+
+	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/command/stack"
 )
+
+// TestDeployArgsResolveImage verifies that every deploy carries --resolve-image with the
+// configured mode, and that the arguments it had before are unchanged.
+func TestDeployArgsResolveImage(t *testing.T) {
+	for _, mode := range []string{"always", "changed", "never"} {
+		got := deployArgs("repos/r/docker-compose.yaml", "mystack", mode)
+		want := []string{
+			"deploy", "--detach", "--with-registry-auth",
+			"--resolve-image", mode,
+			"-c", "repos/r/docker-compose.yaml",
+			"mystack",
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("mode %s: got %q, want %q", mode, got, want)
+		}
+	}
+}
+
+// TestDeployArgsParseAsDockerStackDeploy feeds deployArgs to docker/cli's own `stack
+// deploy` command, the one deployStack runs, and reads the flags back: the arguments are
+// valid for the real command, not just shaped as intended. No daemon is contacted.
+func TestDeployArgsParseAsDockerStackDeploy(t *testing.T) {
+	cli, err := command.NewDockerCli()
+	if err != nil {
+		t.Fatalf("NewDockerCli: %v", err)
+	}
+	root := stack.NewStackCommand(cli)
+	deploy, rest, err := root.Find(deployArgs("repos/r/docker-compose.yaml", "mystack", "changed"))
+	if err != nil {
+		t.Fatalf("find the deploy subcommand: %v", err)
+	}
+	if deploy.Name() != "deploy" {
+		t.Fatalf("expected the deploy subcommand, got %q", deploy.Name())
+	}
+	if err := deploy.ParseFlags(rest); err != nil {
+		t.Fatalf("docker stack deploy rejects the arguments: %v", err)
+	}
+	flags := deploy.Flags()
+	if v, _ := flags.GetString("resolve-image"); v != "changed" {
+		t.Errorf("--resolve-image parsed as %q, want %q", v, "changed")
+	}
+	if v, _ := flags.GetStringSlice("compose-file"); !slices.Equal(v, []string{"repos/r/docker-compose.yaml"}) {
+		t.Errorf("--compose-file parsed as %q", v)
+	}
+	for _, name := range []string{"detach", "with-registry-auth"} {
+		if v, _ := flags.GetBool(name); !v {
+			t.Errorf("--%s parsed as false", name)
+		}
+	}
+	if args := flags.Args(); !slices.Equal(args, []string{"mystack"}) {
+		t.Errorf("positional arguments parsed as %q, want [mystack]", args)
+	}
+}
 
 // External objects are ignored by the rotation
 func TestRotateExternalObjects(t *testing.T) {
