@@ -256,13 +256,27 @@ func (swarmStack *swarmStack) writeStack(composeMap map[string]any) error {
 	return nil
 }
 
+// deployArgs are the `docker stack` arguments for one deploy. resolveImage is passed as
+// --resolve-image: with "changed", a cycle that creates no service and changes no image
+// string asks the registry nothing. The deploy still re-applies the stack, but docker
+// keeps each unchanged service's running image, so an image set out of band is not
+// reverted.
+func deployArgs(composeFile, stackName, resolveImage string) []string {
+	return []string{
+		"deploy", "--detach", "--with-registry-auth",
+		"--resolve-image", resolveImage,
+		"-c", composeFile,
+		stackName,
+	}
+}
+
 func (swarmStack *swarmStack) deployStack() error {
 	cmd := stack.NewStackCommand(dockerCli)
-	cmd.SetArgs([]string{
-		"deploy", "--detach", "--with-registry-auth", "-c",
+	cmd.SetArgs(deployArgs(
 		path.Join(swarmStack.repo.path, swarmStack.composePath),
 		swarmStack.name,
-	})
+		config.ResolveImage,
+	))
 	// To stop printing errors and
 	// usage message to stdout
 	cmd.SilenceErrors = true

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -49,14 +51,23 @@ type Config struct {
 	RepoConfigs          map[string]*RepoConfig  `mapstructure:"repos"`
 	SopsSecretsDiscovery bool                    `mapstructure:"sops_secrets_discovery"`
 	Address              string                  `mapstructure:"address"`
+	ResolveImage         string                  `mapstructure:"resolve_image"`
 }
 
 var Configs Config
+
+// ResolveImageModes are the values `docker stack deploy --resolve-image` accepts.
+var ResolveImageModes = []string{"always", "changed", "never"}
 
 func LoadConfigs() (err error) {
 	err = readConfig()
 	if err != nil {
 		return fmt.Errorf("could not read configuration file: %w", err)
+	}
+
+	err = validateResolveImage(Configs.ResolveImage)
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Detect inline config conflicts and check for split files on disk.
@@ -144,11 +155,21 @@ func readConfig() (err error) {
 	configViper.SetDefault("auto_rotate", true)
 	configViper.SetDefault("sops_secrets_discovery", false)
 	configViper.SetDefault("address", "0.0.0.0:8080")
+	configViper.SetDefault("resolve_image", "always")
 	err = configViper.ReadInConfig()
 	if err != nil && !errors.As(err, &viper.ConfigFileNotFoundError{}) {
 		return
 	}
 	return configViper.Unmarshal(&Configs)
+}
+
+// validateResolveImage rejects a resolve_image that docker would refuse, at startup,
+// rather than letting every deploy fail on it later.
+func validateResolveImage(mode string) error {
+	if slices.Contains(ResolveImageModes, mode) {
+		return nil
+	}
+	return fmt.Errorf("resolve_image %q is not one of %s", mode, strings.Join(ResolveImageModes, ", "))
 }
 
 func readRepoConfigs() (err error) {

@@ -242,6 +242,30 @@ secrets:
 ```
 Note: if running swarmcd as a user other than root, modify the docker config mount path to match.
 
+## Reduce registry requests
+
+SwarmCD re-applies every stack on every update cycle. That is what reverts drift, and by
+default (`resolve_image: always`) each re-apply also asks the registry for every service's
+image. On a large stack, a short interval, or a registry with request quotas, set this in
+`config.yaml`:
+
+```yaml
+# config.yaml
+resolve_image: changed
+```
+
+With `changed`, the registry is asked only for a service that is new or whose `image:`
+changed in the compose file, so an unchanged cycle makes no registry requests. The
+trade-offs:
+- a service on a mutable tag (such as `:latest`) no longer follows that tag when it moves
+  upstream. Pin a version or a digest, and change it in Git;
+- the re-apply still reverts other drift, but not an image set out of band with
+  `docker service update --image`, which stays until the compose file's `image:` changes;
+- on a swarm with mixed CPU architectures, add `node.platform.arch` placement constraints,
+  because only a registry query sets a service's platform placement.
+
+See [docs/config.yaml](docs/config.yaml).
+
 ## Documentation
 
 See [docs](https://github.com/m-adawi/swarm-cd/blob/main/docs).
