@@ -7,7 +7,7 @@ COPY ui/ ./
 RUN npm run build
 
 # Stage 2: Build the backend
-FROM golang:1.22-alpine AS backend-build
+FROM golang:1.27-alpine AS backend-build
 ARG TARGETARCH
 ARG VERSION=dev
 WORKDIR /backend
@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
       -o /swarm-cd ./cmd/
 
 # Stage 3: Final production image (depends on previous stages)
-FROM alpine:3.22.1
+FROM alpine:3.24.2
 WORKDIR /app
 RUN apk add --no-cache ca-certificates gnupg && update-ca-certificates
 # Copy the built backend binary from the backend build stage
